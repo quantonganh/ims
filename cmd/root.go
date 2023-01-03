@@ -47,6 +47,7 @@ type config struct {
 	Username string  `yaml:"username"`
 	Password string  `yaml:"password"`
 	Formula  formula `yaml:"formula"`
+	OutDir   string  `yaml:"outDir"`
 }
 
 type formula struct {

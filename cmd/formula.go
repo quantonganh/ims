@@ -5,10 +5,17 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"os"
+	"path"
+	"strings"
+	"sync"
 	"time"
 
+	"github.com/chromedp/cdproto/browser"
 	"github.com/chromedp/chromedp"
+	"github.com/mitchellh/go-homedir"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -30,8 +37,21 @@ to quickly create a Cobra application.`,
 		ctx, cancel := chromedp.NewContext(allocCtx, chromedp.WithDebugf(log.Printf))
 		defer cancel()
 
-		if err := chromedp.Run(ctx, genReport()); err != nil {
+		tasks, m := genReport(ctx)
+		if err := chromedp.Run(ctx, tasks); err != nil {
 			log.Fatal(err)
+		}
+
+		home, err := homedir.Dir()
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println("home: ", home)
+
+		for template := range m {
+			if err := os.Rename(path.Join(home, "Downloads", m[template]), path.Join(conf.OutDir, "THDN.xlsx")); err != nil {
+				log.Fatal(err)
+			}
 		}
 	},
 }
@@ -50,9 +70,11 @@ func init() {
 	// formulaCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
 
-func genReport() chromedp.Tasks {
+func genReport(ctx context.Context) (chromedp.Tasks, map[string]string) {
 	selName := `//input[@id="js_usernameid"]`
 	selPass := `//input[@id="loginform_password"]`
+
+	tasks, m := genFormulaReports(ctx)
 	return chromedp.Tasks{
 		chromedp.Navigate(viper.GetString("url")),
 		chromedp.WaitVisible(selPass),
@@ -60,11 +82,11 @@ func genReport() chromedp.Tasks {
 		chromedp.SendKeys(selPass, viper.GetString("password")),
 		chromedp.Submit(selPass),
 		chromedp.WaitVisible(`//div[@id="cssmenu"]`),
-		genFormulaReports(),
-	}
+		tasks,
+	}, m
 }
 
-func genFormulaReports() chromedp.Tasks {
+func genFormulaReports(ctx context.Context) (chromedp.Tasks, map[string]string) {
 	selFormula := `//div[@id="report_group_form"]`
 	selDatePicker := `input[name="export_date"]`
 	selSubmitForm := `//input[@id="submitform"]`
@@ -72,21 +94,45 @@ func genFormulaReports() chromedp.Tasks {
 
 	yesterday := time.Now().Add(-24 * time.Hour)
 
+	var wg sync.WaitGroup
+	wg.Add(len(conf.Formula.Templates))
+	m := make(map[string]string)
 	var tasks chromedp.Tasks
 	for _, template := range conf.Formula.Templates {
+		chromedp.ListenTarget(ctx, func(v interface{}) {
+			switch ev := v.(type) {
+			case *browser.EventDownloadWillBegin:
+				log.Println("EventDownloadWillBegin: ", ev.URL)
+				if strings.HasPrefix(ev.SuggestedFilename, template) {
+					m[template] = ev.SuggestedFilename
+				}
+			case *browser.EventDownloadProgress:
+				log.Println("EventDownloadProgress: ", ev.State)
+				if ev.State == browser.DownloadProgressStateCompleted {
+					wg.Done()
+				}
+			default:
+				return
+			}
+		})
+
 		tasks = append(tasks, chromedp.Tasks{
 			chromedp.Navigate(conf.Formula.URL),
 			chromedp.WaitVisible(selFormula),
 			chromedp.Click(`//select[@id="save"]`, chromedp.BySearch),
+			chromedp.Sleep(1 * time.Second),
 			chromedp.SetValue(`//select[@id="save"]`, template, chromedp.BySearch),
 			chromedp.WaitVisible(selDatePicker),
 			chromedp.SetValue(selDatePicker, yesterday.Format("02/01/2006"), chromedp.ByQuery),
 			chromedp.Submit(selSubmitForm),
 			chromedp.WaitVisible(selFormDownload),
 			chromedp.Submit(selFormDownload),
-			chromedp.Sleep(3 * time.Second),
+			chromedp.ActionFunc(func(_ context.Context) error {
+				wg.Wait()
+				return nil
+			}),
 		})
 	}
 
-	return tasks
+	return tasks, m
 }
