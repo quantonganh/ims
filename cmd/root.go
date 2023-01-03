@@ -14,10 +14,8 @@ import (
 )
 
 var (
-	cfgFile  string
-	url      string
-	username string
-	password string
+	cfgFile string
+	conf    *config
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -42,6 +40,18 @@ func Execute() {
 	if err != nil {
 		os.Exit(1)
 	}
+}
+
+type config struct {
+	URL      string  `yaml:"url"`
+	Username string  `yaml:"username"`
+	Password string  `yaml:"password"`
+	Formula  formula `yaml:"formula"`
+}
+
+type formula struct {
+	URL       string   `yaml:"url"`
+	Templates []string `yaml:"templates"`
 }
 
 func init() {
@@ -80,6 +90,10 @@ func initConfig() {
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err != nil {
+		log.Fatal(err)
+	}
+
+	if err := viper.Unmarshal(&conf); err != nil {
 		log.Fatal(err)
 	}
 }

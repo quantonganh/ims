@@ -13,9 +13,9 @@ import (
 	"github.com/spf13/viper"
 )
 
-// reportCmd represents the report command
-var reportCmd = &cobra.Command{
-	Use:   "report",
+// formulaCmd represents the report command
+var formulaCmd = &cobra.Command{
+	Use:   "formula",
 	Short: "A brief description of your command",
 	Long: `A longer description that spans multiple lines and likely contains examples
 and usage of using your command. For example:
@@ -37,28 +37,22 @@ to quickly create a Cobra application.`,
 }
 
 func init() {
-	rootCmd.AddCommand(reportCmd)
+	rootCmd.AddCommand(formulaCmd)
 
 	// Here you will define your flags and configuration settings.
 
 	// Cobra supports Persistent Flags which will work for this command
 	// and all subcommands, e.g.:
-	// reportCmd.PersistentFlags().String("foo", "", "A help for foo")
+	// formulaCmd.PersistentFlags().String("foo", "", "A help for foo")
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
-	// reportCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	// formulaCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
 
 func genReport() chromedp.Tasks {
 	selName := `//input[@id="js_usernameid"]`
 	selPass := `//input[@id="loginform_password"]`
-	selFormula := `//div[@id="report_group_form"]`
-	selDatePicker := `input[name="export_date"]`
-	selSubmitForm := `//input[@id="submitform"]`
-	selFormDownload := `//input[@id="formdownload_fileNamelocal"]`
-
-	yesterday := time.Now().Add(-24 * time.Hour)
 	return chromedp.Tasks{
 		chromedp.Navigate(viper.GetString("url")),
 		chromedp.WaitVisible(selPass),
@@ -66,14 +60,33 @@ func genReport() chromedp.Tasks {
 		chromedp.SendKeys(selPass, viper.GetString("password")),
 		chromedp.Submit(selPass),
 		chromedp.WaitVisible(`//div[@id="cssmenu"]`),
-		chromedp.Navigate(viper.GetString("formula_url")),
-		chromedp.WaitVisible(selFormula),
-		chromedp.Click(`//select[@id="save"]`, chromedp.BySearch),
-		chromedp.SetValue(`//select[@id="save"]`, "FORMULA0000000058", chromedp.BySearch),
-		chromedp.WaitVisible(selDatePicker),
-		chromedp.SetValue(selDatePicker, yesterday.Format("02/01/2006"), chromedp.ByQuery),
-		chromedp.Submit(selSubmitForm),
-		chromedp.WaitVisible(selFormDownload),
-		chromedp.Submit(selFormDownload),
+		genFormulaReports(),
 	}
+}
+
+func genFormulaReports() chromedp.Tasks {
+	selFormula := `//div[@id="report_group_form"]`
+	selDatePicker := `input[name="export_date"]`
+	selSubmitForm := `//input[@id="submitform"]`
+	selFormDownload := `form[id="formdownload"]`
+
+	yesterday := time.Now().Add(-24 * time.Hour)
+
+	var tasks chromedp.Tasks
+	for _, template := range conf.Formula.Templates {
+		tasks = append(tasks, chromedp.Tasks{
+			chromedp.Navigate(conf.Formula.URL),
+			chromedp.WaitVisible(selFormula),
+			chromedp.Click(`//select[@id="save"]`, chromedp.BySearch),
+			chromedp.SetValue(`//select[@id="save"]`, template, chromedp.BySearch),
+			chromedp.WaitVisible(selDatePicker),
+			chromedp.SetValue(selDatePicker, yesterday.Format("02/01/2006"), chromedp.ByQuery),
+			chromedp.Submit(selSubmitForm),
+			chromedp.WaitVisible(selFormDownload),
+			chromedp.Submit(selFormDownload),
+			chromedp.Sleep(3 * time.Second),
+		})
+	}
+
+	return tasks
 }
