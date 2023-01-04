@@ -5,14 +5,14 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"log"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/chromedp/cdproto/network"
+	"github.com/chromedp/cdproto/browser"
 	"github.com/chromedp/chromedp"
 	"github.com/mitchellh/go-homedir"
 	"github.com/spf13/cobra"
@@ -51,6 +51,7 @@ to quickly create a Cobra application.`,
 			log.Fatal(err)
 		}
 
+		fmt.Printf("m: %+v", m)
 		for _, r := range m {
 			if err := os.Rename(filepath.Join(home, "Downloads", r.SourceFile), filepath.Join(conf.OutDir, r.TargetFile)); err != nil {
 				log.Fatal(err)
@@ -99,30 +100,25 @@ func genFormulaReports(ctx context.Context) (chromedp.Tasks, map[string]report) 
 
 	templates := conf.Formula.Templates
 	m := make(map[string]report, len(templates))
+	chromedp.ListenTarget(ctx, func(v interface{}) {
+		switch ev := v.(type) {
+		case *browser.EventDownloadWillBegin:
+			log.Println("EventDownloadWillBegin: ", ev.SuggestedFilename)
+			templateName := strings.Split(ev.SuggestedFilename, "_")[0]
+			_, ok := m[templateName]
+			if !ok {
+				m[templateName] = report{
+					SourceFile: ev.SuggestedFilename,
+					TargetFile: getTargetFile(templateName),
+				}
+			}
+		default:
+			return
+		}
+	})
+
 	var tasks chromedp.Tasks
 	for i := range templates {
-		chromedp.ListenTarget(ctx, func(v interface{}) {
-			switch ev := v.(type) {
-			case *network.EventRequestWillBeSent:
-				if ev.Request.HasPostData {
-					log.Println("EventRequestWillBeSent: ", ev.Request.PostData)
-					remoteFile, err := url.QueryUnescape(ev.Request.PostData)
-					if err != nil {
-						log.Fatal(err)
-					}
-					sourceFile := filepath.Base(remoteFile)
-					if strings.HasPrefix(sourceFile, templates[i].Name) {
-						m[templates[i].Name] = report{
-							SourceFile: filepath.Base(remoteFile),
-							TargetFile: templates[i].TargetFile,
-						}
-					}
-				}
-			default:
-				return
-			}
-		})
-
 		tasks = append(tasks, chromedp.Tasks{
 			chromedp.Navigate(conf.Formula.URL),
 			chromedp.WaitVisible(selFormula),
@@ -133,10 +129,21 @@ func genFormulaReports(ctx context.Context) (chromedp.Tasks, map[string]report) 
 			chromedp.SetValue(selDatePicker, yesterday.Format("02/01/2006"), chromedp.ByQuery),
 			chromedp.Submit(selSubmitForm),
 			chromedp.WaitVisible(selFormDownload),
+			browser.SetDownloadBehavior(browser.SetDownloadBehaviorBehaviorDefault).WithEventsEnabled(true),
 			chromedp.Submit(selFormDownload),
 			chromedp.Sleep(3 * time.Second),
 		})
 	}
 
 	return tasks, m
+}
+
+func getTargetFile(templateName string) string {
+	templates := conf.Formula.Templates
+	for i := range templates {
+		if templates[i].Name == templateName {
+			return templates[i].TargetFile
+		}
+	}
+	return ""
 }
