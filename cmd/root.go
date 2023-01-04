@@ -51,8 +51,13 @@ type config struct {
 }
 
 type formula struct {
-	URL       string   `yaml:"url"`
-	Templates []string `yaml:"templates"`
+	URL       string     `yaml:"url"`
+	Templates []template `yaml:"templates"`
+}
+
+type template struct {
+	Name       string `yaml:"name"`
+	TargetFile string `yaml:"targetFile"`
 }
 
 func init() {

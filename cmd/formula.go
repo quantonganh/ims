@@ -5,21 +5,24 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"log"
+	"net/url"
 	"os"
-	"path"
+	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
-	"github.com/chromedp/cdproto/browser"
-	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
 	"github.com/mitchellh/go-homedir"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
+
+type report struct {
+	SourceFile string
+	TargetFile string
+}
 
 // formulaCmd represents the report command
 var formulaCmd = &cobra.Command{
@@ -47,10 +50,9 @@ to quickly create a Cobra application.`,
 		if err != nil {
 			log.Fatal(err)
 		}
-		fmt.Println("home: ", home)
 
-		for template := range m {
-			if err := os.Rename(path.Join(home, "Downloads", m[template]), path.Join(conf.OutDir, "THDN.xlsx")); err != nil {
+		for _, r := range m {
+			if err := os.Rename(filepath.Join(home, "Downloads", r.SourceFile), filepath.Join(conf.OutDir, r.TargetFile)); err != nil {
 				log.Fatal(err)
 			}
 		}
@@ -71,7 +73,7 @@ func init() {
 	// formulaCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
 
-func genReport(ctx context.Context) (chromedp.Tasks, map[string]string) {
+func genReport(ctx context.Context) (chromedp.Tasks, map[string]report) {
 	selName := `//input[@id="js_usernameid"]`
 	selPass := `//input[@id="loginform_password"]`
 
@@ -87,7 +89,7 @@ func genReport(ctx context.Context) (chromedp.Tasks, map[string]string) {
 	}, m
 }
 
-func genFormulaReports(ctx context.Context) (chromedp.Tasks, map[string]string) {
+func genFormulaReports(ctx context.Context) (chromedp.Tasks, map[string]report) {
 	selFormula := `//div[@id="report_group_form"]`
 	selDatePicker := `input[name="export_date"]`
 	selSubmitForm := `//input[@id="submitform"]`
@@ -95,22 +97,26 @@ func genFormulaReports(ctx context.Context) (chromedp.Tasks, map[string]string) 
 
 	yesterday := time.Now().Add(-24 * time.Hour)
 
-	var wg sync.WaitGroup
-	wg.Add(len(conf.Formula.Templates))
-	m := make(map[string]string)
+	templates := conf.Formula.Templates
+	m := make(map[string]report, len(templates))
 	var tasks chromedp.Tasks
-	for _, template := range conf.Formula.Templates {
-		chromedp.ListenBrowser(ctx, func(v interface{}) {
+	for i := range templates {
+		chromedp.ListenTarget(ctx, func(v interface{}) {
 			switch ev := v.(type) {
-			case *browser.EventDownloadWillBegin:
-				log.Println("EventDownloadWillBegin: ", ev.URL)
-				if strings.HasPrefix(ev.SuggestedFilename, template) {
-					m[template] = ev.SuggestedFilename
-				}
-			case *browser.EventDownloadProgress:
-				log.Println("EventDownloadProgress: ", ev.State)
-				if ev.State == browser.DownloadProgressStateCompleted {
-					wg.Done()
+			case *network.EventRequestWillBeSent:
+				if ev.Request.HasPostData {
+					log.Println("EventRequestWillBeSent: ", ev.Request.PostData)
+					remoteFile, err := url.QueryUnescape(ev.Request.PostData)
+					if err != nil {
+						log.Fatal(err)
+					}
+					sourceFile := filepath.Base(remoteFile)
+					if strings.HasPrefix(sourceFile, templates[i].Name) {
+						m[templates[i].Name] = report{
+							SourceFile: filepath.Base(remoteFile),
+							TargetFile: templates[i].TargetFile,
+						}
+					}
 				}
 			default:
 				return
@@ -122,17 +128,13 @@ func genFormulaReports(ctx context.Context) (chromedp.Tasks, map[string]string) 
 			chromedp.WaitVisible(selFormula),
 			chromedp.Click(`//select[@id="save"]`, chromedp.BySearch),
 			chromedp.Sleep(1 * time.Second),
-			chromedp.SetValue(`//select[@id="save"]`, template, chromedp.BySearch),
+			chromedp.SetValue(`//select[@id="save"]`, templates[i].Name, chromedp.BySearch),
 			chromedp.WaitVisible(selDatePicker),
 			chromedp.SetValue(selDatePicker, yesterday.Format("02/01/2006"), chromedp.ByQuery),
 			chromedp.Submit(selSubmitForm),
 			chromedp.WaitVisible(selFormDownload),
 			chromedp.Submit(selFormDownload),
-			chromedp.ActionFunc(func(ctx context.Context) error {
-				wg.Wait()
-				c := chromedp.FromContext(ctx)
-				return browser.SetDownloadBehavior(browser.SetDownloadBehaviorBehaviorAllowAndName).WithEventsEnabled(true).Do(cdp.WithExecutor(ctx, c.Browser))
-			}),
+			chromedp.Sleep(3 * time.Second),
 		})
 	}
 
