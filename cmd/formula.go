@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto/browser"
+	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/chromedp"
 	"github.com/mitchellh/go-homedir"
 	"github.com/spf13/cobra"
@@ -99,7 +100,7 @@ func genFormulaReports(ctx context.Context) (chromedp.Tasks, map[string]string) 
 	m := make(map[string]string)
 	var tasks chromedp.Tasks
 	for _, template := range conf.Formula.Templates {
-		chromedp.ListenTarget(ctx, func(v interface{}) {
+		chromedp.ListenBrowser(ctx, func(v interface{}) {
 			switch ev := v.(type) {
 			case *browser.EventDownloadWillBegin:
 				log.Println("EventDownloadWillBegin: ", ev.URL)
@@ -127,9 +128,10 @@ func genFormulaReports(ctx context.Context) (chromedp.Tasks, map[string]string) 
 			chromedp.Submit(selSubmitForm),
 			chromedp.WaitVisible(selFormDownload),
 			chromedp.Submit(selFormDownload),
-			chromedp.ActionFunc(func(_ context.Context) error {
+			chromedp.ActionFunc(func(ctx context.Context) error {
 				wg.Wait()
-				return nil
+				c := chromedp.FromContext(ctx)
+				return browser.SetDownloadBehavior(browser.SetDownloadBehaviorBehaviorAllowAndName).WithEventsEnabled(true).Do(cdp.WithExecutor(ctx, c.Browser))
 			}),
 		})
 	}
