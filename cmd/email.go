@@ -1,0 +1,60 @@
+/*
+Copyright © 2023 NAME HERE <EMAIL ADDRESS>
+*/
+package cmd
+
+import (
+	"fmt"
+	"log"
+	"path/filepath"
+
+	"github.com/pkg/errors"
+	"github.com/spf13/cobra"
+	"gopkg.in/gomail.v2"
+)
+
+// emailCmd represents the email command
+var emailCmd = &cobra.Command{
+	Use:   "email",
+	Short: "A brief description of your command",
+	Long: `A longer description that spans multiple lines and likely contains examples
+and usage of using your command. For example:
+
+Cobra is a CLI library for Go that empowers applications.
+This application is a tool to generate the needed files
+to quickly create a Cobra application.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		if err := sendEmail(conf.Formula.Email.Subject, conf.Formula.Email.Body); err != nil {
+			log.Fatal(err)
+		}
+	},
+}
+
+func init() {
+	formulaCmd.AddCommand(emailCmd)
+
+	// Here you will define your flags and configuration settings.
+
+	// Cobra supports Persistent Flags which will work for this command
+	// and all subcommands, e.g.:
+	// emailCmd.PersistentFlags().String("foo", "", "A help for foo")
+
+	// Cobra supports local flags which will only run when this command
+	// is called directly, e.g.:
+	// emailCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+}
+
+func sendEmail(subject, body string) error {
+	m := gomail.NewMessage()
+	m.SetHeader("From", conf.Formula.Email.From)
+	m.SetHeader("To", conf.Formula.Email.To)
+	m.SetHeader("Subject", subject)
+	m.Attach(filepath.Join(conf.OutDir, conf.Formula.Email.Attach))
+	m.SetBody("text/html", body)
+	d := gomail.NewDialer(conf.SMTP.Host, conf.SMTP.Port, conf.SMTP.Username, conf.SMTP.Password)
+	if err := d.DialAndSend(m); err != nil {
+		return errors.Errorf("failed to send mail to %s: %v", fmt.Sprintf("%+v\n", conf.Formula.Email.To), err)
+	}
+
+	return nil
+}

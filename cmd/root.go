@@ -48,16 +48,33 @@ type config struct {
 	Password string  `yaml:"password"`
 	Formula  formula `yaml:"formula"`
 	OutDir   string  `yaml:"outDir"`
+	SMTP     SMTP    `yaml:"smtp"`
 }
 
 type formula struct {
 	URL       string     `yaml:"url"`
 	Templates []template `yaml:"templates"`
+	Email     email      `yaml:"email"`
 }
 
 type template struct {
 	Name       string `yaml:"name"`
 	TargetFile string `yaml:"targetFile"`
+}
+
+type email struct {
+	From    string `yaml:"from"`
+	To      string `yaml:"to"`
+	Attach  string `yaml:"attach"`
+	Subject string `yaml:"subject"`
+	Body    string `yaml:"body"`
+}
+
+type SMTP struct {
+	Host     string
+	Port     int
+	Username string
+	Password string
 }
 
 func init() {
