@@ -11,7 +11,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/chromedp/cdproto/browser"
@@ -46,8 +45,6 @@ to quickly create a Cobra application.`,
 
 		templates := conf.Formula.Templates
 		m := make(map[string]report, len(templates))
-		var wg sync.WaitGroup
-		wg.Add(len(templates))
 		chromedp.ListenTarget(ctx, func(v interface{}) {
 			switch ev := v.(type) {
 			case *browser.EventDownloadWillBegin:
@@ -60,11 +57,6 @@ to quickly create a Cobra application.`,
 						TargetFile: getTargetFile(templateName),
 					}
 				}
-			case *browser.EventDownloadProgress:
-				log.Println("EventDownloadProgress: ", ev.State)
-				if ev.State == browser.DownloadProgressStateCompleted {
-					wg.Done()
-				}
 			default:
 				return
 			}
@@ -73,8 +65,6 @@ to quickly create a Cobra application.`,
 		if err := chromedp.Run(ctx, tasks); err != nil {
 			log.Fatal(err)
 		}
-
-		wg.Wait()
 
 		home, err := homedir.Dir()
 		if err != nil {
@@ -164,6 +154,7 @@ func genFormulaReports(ctx context.Context) (chromedp.Tasks, map[string]report) 
 			browser.SetDownloadBehavior(browser.SetDownloadBehaviorBehaviorDefault).
 				WithEventsEnabled(true),
 			chromedp.Submit(selFormDownload),
+			chromedp.Sleep(3 * time.Second),
 		})
 	}
 
