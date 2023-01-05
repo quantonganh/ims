@@ -43,25 +43,21 @@ func Execute() {
 }
 
 type config struct {
-	URL      string  `yaml:"url"`
-	Username string  `yaml:"username"`
-	Password string  `yaml:"password"`
-	Formula  formula `yaml:"formula"`
-	OutDir   string  `yaml:"outDir"`
-	Wifi     Wifi    `yaml:"wifi"`
-	SMTP     SMTP    `yaml:"smtp"`
+	URL       string  `yaml:"url"`
+	Username  string  `yaml:"username"`
+	Password  string  `yaml:"password"`
+	Formula   formula `yaml:"formula"`
+	OutDir    string  `yaml:"outDir"`
+	ExcelPath string  `yaml:"excelPath"`
+	Wifi      Wifi    `yaml:"wifi"`
+	SMTP      SMTP    `yaml:"smtp"`
 }
 
 type formula struct {
 	URL       string     `yaml:"url"`
 	Templates []template `yaml:"templates"`
-	File      File       `yaml:"file"`
+	File      string     `yaml:"file"`
 	Email     email      `yaml:"email"`
-}
-
-type File struct {
-	Name   string
-	Sheets []string
 }
 
 type template struct {

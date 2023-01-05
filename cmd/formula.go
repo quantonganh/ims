@@ -18,7 +18,6 @@ import (
 	"github.com/mitchellh/go-homedir"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/xuri/excelize/v2"
 )
 
 type report struct {
@@ -172,48 +171,17 @@ func getTargetFile(templateName string) string {
 }
 
 func importData(m map[string]report) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	excel := conf.ExcelPath
 	for _, r := range m {
-		func() {
-			f, err := excelize.OpenFile(filepath.Join(conf.OutDir, r.TargetFile))
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-
-			_, err = f.GetRows("Formula")
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-
-			defer func() {
-				if err := f.Close(); err != nil {
-					fmt.Println(err)
-					return
-				}
-			}()
-		}()
-	}
-
-	f, err := excelize.OpenFile(filepath.Join(conf.OutDir, conf.Formula.File.Name))
-	if err != nil {
-		return err
-	}
-
-	for _, sheet := range conf.Formula.File.Sheets {
-		rows, err := f.GetRows(sheet)
-		if err != nil {
+		if err := exec.CommandContext(ctx, excel, filepath.Join(conf.OutDir, r.TargetFile)).Run(); err != nil {
 			return err
 		}
-		for _, row := range rows {
-			for _, colCell := range row {
-				fmt.Print(colCell, "\t")
-			}
-			fmt.Println()
-		}
 	}
 
-	if err := f.Close(); err != nil {
+	if err := exec.CommandContext(ctx, excel, filepath.Join(conf.OutDir, conf.Formula.File)).Run(); err != nil {
 		return err
 	}
 

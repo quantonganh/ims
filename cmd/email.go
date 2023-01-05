@@ -62,7 +62,7 @@ func sendEmail(subject, body string) error {
 	m.SetHeader("From", conf.Formula.Email.From)
 	m.SetHeader("To", conf.Formula.Email.To)
 	m.SetHeader("Subject", subject)
-	m.Attach(filepath.Join(conf.OutDir, conf.Formula.Email.Attach))
+	m.Attach(filepath.Join(conf.OutDir, conf.Formula.File))
 	m.SetBody("text/html", body)
 	d := gomail.NewDialer(conf.SMTP.Host, conf.SMTP.Port, conf.SMTP.Username, conf.SMTP.Password)
 	if err := d.DialAndSend(m); err != nil {
