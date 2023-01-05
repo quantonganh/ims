@@ -6,6 +6,7 @@ package cmd
 import (
 	"fmt"
 	"log"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/pkg/errors"
@@ -24,7 +25,17 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		winCmd := exec.Command("cmd.exe", "/c", "netsh", "wlan", "connect", fmt.Sprintf("ssid=%s", conf.Wifi.SendMail), fmt.Sprintf("name=%s", conf.Wifi.SendMail))
+		if err := winCmd.Run(); err != nil {
+			log.Fatal(err)
+		}
+
 		if err := sendEmail(conf.Formula.Email.Subject, conf.Formula.Email.Body); err != nil {
+			log.Fatal(err)
+		}
+
+		winCmd = exec.Command("cmd.exe", "/c", "netsh", "wlan", "connect", fmt.Sprintf("ssid=%s", conf.Wifi.ExportReport), fmt.Sprintf("name=%s", conf.Wifi.ExportReport))
+		if err := winCmd.Run(); err != nil {
 			log.Fatal(err)
 		}
 	},

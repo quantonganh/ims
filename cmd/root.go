@@ -48,6 +48,7 @@ type config struct {
 	Password string  `yaml:"password"`
 	Formula  formula `yaml:"formula"`
 	OutDir   string  `yaml:"outDir"`
+	Wifi     Wifi    `yaml:"wifi"`
 	SMTP     SMTP    `yaml:"smtp"`
 }
 
@@ -68,6 +69,11 @@ type email struct {
 	Attach  string `yaml:"attach"`
 	Subject string `yaml:"subject"`
 	Body    string `yaml:"body"`
+}
+
+type Wifi struct {
+	ExportReport string `yaml:"exportReport"`
+	SendMail     string `yaml:"sendMail"`
 }
 
 type SMTP struct {
