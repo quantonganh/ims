@@ -30,7 +30,7 @@ to quickly create a Cobra application.`,
 		if err := winCmd.Run(); err != nil {
 			log.Fatal(err)
 		}
-		time.Sleep(5 * time.Second)
+		time.Sleep(10 * time.Second)
 
 		if err := sendEmail(conf.Formula.Email.Subject, conf.Formula.Email.Body); err != nil {
 			log.Fatal(err)
