@@ -173,19 +173,26 @@ func getTargetFile(templateName string) string {
 
 func importData(m map[string]report) error {
 	for _, r := range m {
-		f, err := excelize.OpenFile(filepath.Join(conf.OutDir, r.TargetFile))
-		if err != nil {
-			return err
-		}
+		func() {
+			f, err := excelize.OpenFile(filepath.Join(conf.OutDir, r.TargetFile))
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
 
-		_, err = f.GetRows("Formula")
-		if err != nil {
-			return err
-		}
+			_, err = f.GetRows("Formula")
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
 
-		if err := f.Close(); err != nil {
-			return err
-		}
+			defer func() {
+				if err := f.Close(); err != nil {
+					fmt.Println(err)
+					return
+				}
+			}()
+		}()
 	}
 
 	f, err := excelize.OpenFile(filepath.Join(conf.OutDir, conf.Formula.File.Name))
