@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -87,6 +88,21 @@ to quickly create a Cobra application.`,
 		}
 
 		if err := importData(m); err != nil {
+			log.Fatal(err)
+		}
+
+		winCmd := exec.Command("cmd.exe", "/c", "netsh", "wlan", "connect", fmt.Sprintf("ssid=%s", conf.Wifi.SendMail), fmt.Sprintf("name=%s", conf.Wifi.SendMail))
+		if err := winCmd.Run(); err != nil {
+			log.Fatal(err)
+		}
+		time.Sleep(5 * time.Second)
+
+		if err := sendEmail(conf.Formula.Email.Subject, conf.Formula.Email.Body); err != nil {
+			log.Fatal(err)
+		}
+
+		winCmd = exec.Command("cmd.exe", "/c", "netsh", "wlan", "connect", fmt.Sprintf("ssid=%s", conf.Wifi.ExportReport), fmt.Sprintf("name=%s", conf.Wifi.ExportReport))
+		if err := winCmd.Run(); err != nil {
 			log.Fatal(err)
 		}
 	},
