@@ -55,7 +55,13 @@ type config struct {
 type formula struct {
 	URL       string     `yaml:"url"`
 	Templates []template `yaml:"templates"`
+	File      File       `yaml:"file"`
 	Email     email      `yaml:"email"`
+}
+
+type File struct {
+	Name   string
+	Sheets []string
 }
 
 type template struct {

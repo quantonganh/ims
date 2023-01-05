@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -17,6 +18,7 @@ import (
 	"github.com/mitchellh/go-homedir"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"github.com/xuri/excelize/v2"
 )
 
 type report struct {
@@ -82,6 +84,10 @@ to quickly create a Cobra application.`,
 			if err := os.Rename(filepath.Join(home, "Downloads", r.SourceFile), filepath.Join(conf.OutDir, r.TargetFile)); err != nil {
 				log.Fatal(err)
 			}
+		}
+
+		if err := importData(m); err != nil {
+			log.Fatal(err)
 		}
 	},
 }
@@ -156,4 +162,46 @@ func getTargetFile(templateName string) string {
 		}
 	}
 	return ""
+}
+
+func importData(m map[string]report) error {
+	for _, r := range m {
+		f, err := excelize.OpenFile(filepath.Join(conf.OutDir, r.TargetFile))
+		if err != nil {
+			return err
+		}
+
+		_, err = f.GetRows("Formula")
+		if err != nil {
+			return err
+		}
+
+		if err := f.Close(); err != nil {
+			return err
+		}
+	}
+
+	f, err := excelize.OpenFile(filepath.Join(conf.OutDir, conf.Formula.File.Name))
+	if err != nil {
+		return err
+	}
+
+	for _, sheet := range conf.Formula.File.Sheets {
+		rows, err := f.GetRows(sheet)
+		if err != nil {
+			return err
+		}
+		for _, row := range rows {
+			for _, colCell := range row {
+				fmt.Print(colCell, "\t")
+			}
+			fmt.Println()
+		}
+	}
+
+	if err := f.Close(); err != nil {
+		return err
+	}
+
+	return nil
 }

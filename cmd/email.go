@@ -8,6 +8,7 @@ import (
 	"log"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -29,6 +30,7 @@ to quickly create a Cobra application.`,
 		if err := winCmd.Run(); err != nil {
 			log.Fatal(err)
 		}
+		time.Sleep(5 * time.Second)
 
 		if err := sendEmail(conf.Formula.Email.Subject, conf.Formula.Email.Body); err != nil {
 			log.Fatal(err)
