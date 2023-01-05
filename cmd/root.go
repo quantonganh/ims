@@ -68,7 +68,6 @@ type template struct {
 type email struct {
 	From    string `yaml:"from"`
 	To      string `yaml:"to"`
-	Attach  string `yaml:"attach"`
 	Subject string `yaml:"subject"`
 	Body    string `yaml:"body"`
 }

@@ -7,9 +7,11 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -84,7 +86,11 @@ to quickly create a Cobra application.`,
 		if err := winCmd.Run(); err != nil {
 			log.Fatal(err)
 		}
-		time.Sleep(5 * time.Second)
+
+		_, err = net.DialTimeout("tcp", net.JoinHostPort(conf.SMTP.Host, strconv.Itoa(conf.SMTP.Port)), 10*time.Second)
+		if err != nil {
+			log.Fatal(err)
+		}
 
 		if err := sendEmail(conf.Formula.Email.Subject, conf.Formula.Email.Body); err != nil {
 			log.Fatal(err)
