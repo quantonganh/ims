@@ -98,10 +98,7 @@ to quickly create a Cobra application.`,
 				log.Fatal(err)
 			}
 
-			_, err = net.DialTimeout("tcp", net.JoinHostPort(conf.SMTP.Host, strconv.Itoa(conf.SMTP.Port)), 10*time.Second)
-			if err != nil {
-				log.Fatal(err)
-			}
+			waitForInternet(30 * time.Second)
 
 			if err := sendEmail(conf.Formula.Email.Subject, conf.Formula.Email.Body); err != nil {
 				log.Fatal(err)
@@ -204,4 +201,22 @@ func importData(m map[string]report) error {
 	}
 	log.Printf("output: %s", string(output))
 	return nil
+}
+
+func waitForInternet(timeout time.Duration) {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	to := time.NewTimer(timeout)
+	defer to.Stop()
+	for {
+		select {
+		case <-to.C:
+			return
+		case <-ticker.C:
+			_, err := net.Dial("tcp", net.JoinHostPort(conf.SMTP.Host, strconv.Itoa(conf.SMTP.Port)))
+			if err == nil {
+				return
+			}
+		}
+	}
 }
