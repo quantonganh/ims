@@ -190,7 +190,7 @@ func importData(m map[string]report) error {
 	}
 
 	winCmd := exec.Command(`C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`, "-ExecutionPolicy", "Bypass", "-File", "./refresh_all.ps1", "-InputFiles", strings.Join(inputFiles, ","), "-OutputFile", filepath.Join(conf.OutDir, conf.Formula.File))
-	output, err := winCmd.Output()
+	output, err := winCmd.CombinedOutput()
 	if err != nil {
 		return err
 	}
