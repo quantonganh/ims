@@ -88,23 +88,29 @@ to quickly create a Cobra application.`,
 			log.Fatal(err)
 		}
 
-		winCmd := exec.Command("cmd.exe", "/c", "netsh", "wlan", "connect", fmt.Sprintf("ssid=%s", conf.Wifi.SendMail), fmt.Sprintf("name=%s", conf.Wifi.SendMail))
-		if err := winCmd.Run(); err != nil {
-			log.Fatal(err)
-		}
-
-		_, err = net.DialTimeout("tcp", net.JoinHostPort(conf.SMTP.Host, strconv.Itoa(conf.SMTP.Port)), 10*time.Second)
+		sendMail, err := cmd.Flags().GetBool("send-mail")
 		if err != nil {
 			log.Fatal(err)
 		}
+		if sendMail {
+			winCmd := exec.Command("cmd.exe", "/c", "netsh", "wlan", "connect", fmt.Sprintf("ssid=%s", conf.Wifi.SendMail), fmt.Sprintf("name=%s", conf.Wifi.SendMail))
+			if err := winCmd.Run(); err != nil {
+				log.Fatal(err)
+			}
 
-		if err := sendEmail(conf.Formula.Email.Subject, conf.Formula.Email.Body); err != nil {
-			log.Fatal(err)
-		}
+			_, err = net.DialTimeout("tcp", net.JoinHostPort(conf.SMTP.Host, strconv.Itoa(conf.SMTP.Port)), 10*time.Second)
+			if err != nil {
+				log.Fatal(err)
+			}
 
-		winCmd = exec.Command("cmd.exe", "/c", "netsh", "wlan", "connect", fmt.Sprintf("ssid=%s", conf.Wifi.ExportReport), fmt.Sprintf("name=%s", conf.Wifi.ExportReport))
-		if err := winCmd.Run(); err != nil {
-			log.Fatal(err)
+			if err := sendEmail(conf.Formula.Email.Subject, conf.Formula.Email.Body); err != nil {
+				log.Fatal(err)
+			}
+
+			winCmd = exec.Command("cmd.exe", "/c", "netsh", "wlan", "connect", fmt.Sprintf("ssid=%s", conf.Wifi.ExportReport), fmt.Sprintf("name=%s", conf.Wifi.ExportReport))
+			if err := winCmd.Run(); err != nil {
+				log.Fatal(err)
+			}
 		}
 	},
 }
@@ -122,6 +128,7 @@ func init() {
 	// is called directly, e.g.:
 	// formulaCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 	formulaCmd.Flags().UintP("days-before", "d", 1, "number of days before today")
+	formulaCmd.Flags().BoolP("send-mail", "s", false, "send mail after importing data")
 }
 
 func genReport(ctx context.Context, daysBefore uint) (chromedp.Tasks, map[string]report) {
