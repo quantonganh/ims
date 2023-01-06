@@ -62,7 +62,13 @@ to quickly create a Cobra application.`,
 				return
 			}
 		})
-		tasks, m := genReport(ctx)
+
+		daysBefore, err := cmd.Flags().GetUint("days-before")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		tasks, m := genReport(ctx, daysBefore)
 		if err := chromedp.Run(ctx, tasks); err != nil {
 			log.Fatal(err)
 		}
@@ -115,13 +121,14 @@ func init() {
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	// formulaCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	formulaCmd.Flags().UintP("days-before", "d", 1, "number of days before today")
 }
 
-func genReport(ctx context.Context) (chromedp.Tasks, map[string]report) {
+func genReport(ctx context.Context, daysBefore uint) (chromedp.Tasks, map[string]report) {
 	selName := `//input[@id="js_usernameid"]`
 	selPass := `//input[@id="loginform_password"]`
 
-	tasks, m := genFormulaReports(ctx)
+	tasks, m := genFormulaReports(ctx, daysBefore)
 	return chromedp.Tasks{
 		chromedp.Navigate(viper.GetString("url")),
 		chromedp.WaitVisible(selPass),
@@ -133,13 +140,13 @@ func genReport(ctx context.Context) (chromedp.Tasks, map[string]report) {
 	}, m
 }
 
-func genFormulaReports(ctx context.Context) (chromedp.Tasks, map[string]report) {
+func genFormulaReports(ctx context.Context, daysBefore uint) (chromedp.Tasks, map[string]report) {
 	selFormula := `//div[@id="report_group_form"]`
 	selDatePicker := `input[name="export_date"]`
 	selSubmitForm := `//input[@id="submitform"]`
 	selFormDownload := `form[id="formdownload"]`
 
-	yesterday := time.Now().Add(-24 * time.Hour)
+	exportDate := time.Now().Add(-time.Duration(daysBefore) * 24 * time.Hour)
 
 	templates := conf.Formula.Templates
 	m := make(map[string]report, len(templates))
@@ -153,7 +160,7 @@ func genFormulaReports(ctx context.Context) (chromedp.Tasks, map[string]report) 
 			chromedp.Sleep(1 * time.Second),
 			chromedp.SetValue(`//select[@id="save"]`, templates[i].Name, chromedp.BySearch),
 			chromedp.WaitVisible(selDatePicker),
-			chromedp.SetValue(selDatePicker, yesterday.Format("02/01/2006"), chromedp.ByQuery),
+			chromedp.SetValue(selDatePicker, exportDate.Format("02/01/2006"), chromedp.ByQuery),
 			chromedp.Submit(selSubmitForm),
 			chromedp.WaitVisible(selFormDownload),
 			browser.SetDownloadBehavior(browser.SetDownloadBehaviorBehaviorDefault).
@@ -177,17 +184,16 @@ func getTargetFile(templateName string) string {
 }
 
 func importData(m map[string]report) error {
+	excelFiles := make([]string, len(m)+1)
+	for _, r := range m {
+		excelFiles = append(excelFiles, filepath.Join(conf.OutDir, r.TargetFile))
+	}
+	excelFiles = append(excelFiles, filepath.Join(conf.OutDir, conf.Formula.File))
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	excel := conf.ExcelPath
-	for _, r := range m {
-		if err := exec.CommandContext(ctx, excel, filepath.Join(conf.OutDir, r.TargetFile)).Run(); err != nil {
-			return err
-		}
-	}
-
-	if err := exec.CommandContext(ctx, excel, filepath.Join(conf.OutDir, conf.Formula.File)).Run(); err != nil {
+	if err := exec.CommandContext(ctx, conf.ExcelPath, excelFiles...).Run(); err != nil {
 		return err
 	}
 
