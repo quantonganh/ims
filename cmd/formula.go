@@ -191,12 +191,13 @@ func getTargetFile(templateName string) string {
 }
 
 func importData(m map[string]report) error {
-	inputFiles := make([]string, len(m))
+	args := []string{"-ExecutionPolicy", "Bypass", "-File", "./refresh_all.ps1"}
 	for _, r := range m {
-		inputFiles = append(inputFiles, filepath.Join(conf.OutDir, r.TargetFile))
+		args = append(args, filepath.Join(conf.OutDir, r.TargetFile))
 	}
+	args = append(args, filepath.Join(conf.OutDir, conf.Formula.File))
 
-	winCmd := exec.Command(`C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`, "-ExecutionPolicy", "Bypass", "-File", "./refresh_all.ps1", "-InputFiles", strings.Join(inputFiles, ","), "-OutputFile", filepath.Join(conf.OutDir, conf.Formula.File))
+	winCmd := exec.Command(`C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`, args...)
 	output, err := winCmd.CombinedOutput()
 	if err != nil {
 		return err
