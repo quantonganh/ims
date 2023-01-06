@@ -36,10 +36,12 @@ to quickly create a Cobra application.`,
 			log.Fatal(err)
 		}
 
-		winCmd = exec.Command("cmd.exe", "/c", "netsh", "wlan", "connect", fmt.Sprintf("ssid=%s", conf.Wifi.ExportReport), fmt.Sprintf("name=%s", conf.Wifi.ExportReport))
-		if err := winCmd.Run(); err != nil {
-			log.Fatal(err)
-		}
+		defer func() {
+			winCmd = exec.Command("cmd.exe", "/c", "netsh", "wlan", "connect", fmt.Sprintf("ssid=%s", conf.Wifi.ExportReport), fmt.Sprintf("name=%s", conf.Wifi.ExportReport))
+			if err := winCmd.Run(); err != nil {
+				log.Fatal(err)
+			}
+		}()
 	},
 }
 
