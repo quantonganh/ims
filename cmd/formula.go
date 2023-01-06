@@ -84,7 +84,9 @@ to quickly create a Cobra application.`,
 			}
 		}
 
-		_ = importData(m)
+		if err := importData(m); err != nil {
+			log.Fatal(err)
+		}
 
 		winCmd := exec.Command("cmd.exe", "/c", "netsh", "wlan", "connect", fmt.Sprintf("ssid=%s", conf.Wifi.SendMail), fmt.Sprintf("name=%s", conf.Wifi.SendMail))
 		if err := winCmd.Run(); err != nil {
@@ -182,18 +184,16 @@ func getTargetFile(templateName string) string {
 }
 
 func importData(m map[string]report) error {
-	excelFiles := make([]string, len(m)+1)
+	inputFiles := make([]string, len(m))
 	for _, r := range m {
-		excelFiles = append(excelFiles, filepath.Join(conf.OutDir, r.TargetFile))
+		inputFiles = append(inputFiles, filepath.Join(conf.OutDir, r.TargetFile))
 	}
-	excelFiles = append(excelFiles, filepath.Join(conf.OutDir, conf.Formula.File))
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if err := exec.CommandContext(ctx, conf.ExcelPath, excelFiles...).Run(); err != nil {
+	winCmd := exec.Command(`C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`, "-ExecutionPolicy", "Bypass", "-File", "./refresh_all.ps1", "-InputFiles", strings.Join(inputFiles, ","), "-OutputFile", filepath.Join(conf.OutDir, conf.Formula.File))
+	output, err := winCmd.Output()
+	if err != nil {
 		return err
 	}
-
+	log.Printf("output: %s", string(output))
 	return nil
 }
