@@ -84,9 +84,7 @@ to quickly create a Cobra application.`,
 			}
 		}
 
-		if err := importData(m); err != nil {
-			log.Fatal(err)
-		}
+		_ = importData(m)
 
 		winCmd := exec.Command("cmd.exe", "/c", "netsh", "wlan", "connect", fmt.Sprintf("ssid=%s", conf.Wifi.SendMail), fmt.Sprintf("name=%s", conf.Wifi.SendMail))
 		if err := winCmd.Run(); err != nil {
