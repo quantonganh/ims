@@ -203,38 +203,30 @@ func getTargetFile(templateName string) string {
 var refreshAll []byte
 
 func importData(targetFiles []string) error {
-	tmp, err := os.CreateTemp("", "refresh_all*.ps1")
+	f, err := os.CreateTemp("", "refresh_all*.ps1")
 	if err != nil {
 		return errors.Wrap(err, "failed to create temp file")
 	}
-	defer os.Remove(tmp.Name())
-
-	f, err := os.OpenFile(tmp.Name(), os.O_WRONLY|os.O_CREATE, 0644)
-	if err != nil {
-		return errors.Wrapf(err, "failed to open file %s", tmp.Name())
-	}
+	defer os.Remove(f.Name())
 
 	_, err = f.Write(refreshAll)
 	if err != nil {
-		return errors.Wrapf(err, "failed to write to the file %s", tmp.Name())
+		return errors.Wrapf(err, "failed to write to the file %s", f.Name())
 	}
 
 	if err := f.Close(); err != nil {
-		return errors.Wrapf(err, "failed to close file %s", tmp.Name())
+		return errors.Wrapf(err, "failed to close file %s", f.Name())
 	}
 
-	retry(30*time.Second, func() bool {
-		args := []string{"-ExecutionPolicy", "Bypass", "-File", tmp.Name()}
-		args = append(args, targetFiles...)
-		args = append(args, filepath.Join(conf.OutDir, conf.Formula.File))
-		winCmd := exec.Command(`C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`, args...)
-		output, err := winCmd.CombinedOutput()
-		log.Printf("output: %s", string(output))
-		if err == nil {
-			return true
-		}
-		return false
-	})
+	args := []string{"-ExecutionPolicy", "Bypass", "-File", f.Name()}
+	args = append(args, targetFiles...)
+	args = append(args, filepath.Join(conf.OutDir, conf.Formula.File))
+	winCmd := exec.Command(`C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`, args...)
+	output, err := winCmd.CombinedOutput()
+	log.Printf("output: %s", string(output))
+	if err != nil {
+		return errors.Wrap(err, "failed to run the command")
+	}
 	return nil
 }
 
