@@ -19,6 +19,7 @@ import (
 	"github.com/chromedp/cdproto/browser"
 	"github.com/chromedp/chromedp"
 	"github.com/mitchellh/go-homedir"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -197,18 +198,18 @@ var refreshAll []byte
 func importData(targetFiles []string) error {
 	tmp, err := os.CreateTemp("", "refresh_all*.ps1")
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to create temp file")
 	}
 	defer os.Remove(tmp.Name())
 
 	f, err := os.OpenFile(tmp.Name(), os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "failed to open file %s", tmp.Name())
 	}
 
 	_, err = f.Write(refreshAll)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "failed to write to the file %s", tmp.Name())
 	}
 
 	if err = f.Close(); err != nil {
@@ -222,7 +223,7 @@ func importData(targetFiles []string) error {
 	output, err := winCmd.CombinedOutput()
 	log.Printf("output: %s", string(output))
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "failed to run the command")
 	}
 	return nil
 }
