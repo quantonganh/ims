@@ -66,10 +66,10 @@ type template struct {
 }
 
 type email struct {
-	From    string `yaml:"from"`
-	To      string `yaml:"to"`
-	Subject string `yaml:"subject"`
-	Body    string `yaml:"body"`
+	From    string   `yaml:"from"`
+	To      []string `yaml:"to"`
+	Subject string   `yaml:"subject"`
+	Body    string   `yaml:"body"`
 }
 
 type Wifi struct {

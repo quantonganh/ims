@@ -61,8 +61,12 @@ func init() {
 
 func sendEmail(subject, body string) error {
 	m := gomail.NewMessage()
+	recipients := make([]string, len(conf.Formula.Email.To))
+	for i, r := range conf.Formula.Email.To {
+		recipients[i] = m.FormatAddress(r, "")
+	}
 	m.SetHeader("From", conf.Formula.Email.From)
-	m.SetHeader("To", conf.Formula.Email.To)
+	m.SetHeader("To", recipients...)
 	m.SetHeader("Subject", subject)
 	m.Attach(filepath.Join(conf.OutDir, conf.Formula.File))
 	m.SetBody("text/html", body)
