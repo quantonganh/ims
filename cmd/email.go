@@ -37,7 +37,7 @@ to quickly create a Cobra application.`,
 			}
 		}()
 
-		waitForInternet(30 * time.Second)
+		retry(30 * time.Second)
 
 		if err := sendEmail(conf.Formula.Email.Subject, conf.Formula.Email.Body); err != nil {
 			log.Fatal(err)

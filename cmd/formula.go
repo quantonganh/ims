@@ -108,7 +108,13 @@ to quickly create a Cobra application.`,
 				}
 			}()
 
-			waitForInternet(30 * time.Second)
+			retry(30*time.Second, func() bool {
+				_, err := net.Dial("tcp", net.JoinHostPort(conf.SMTP.Host, strconv.Itoa(conf.SMTP.Port)))
+				if err == nil {
+					return true
+				}
+				return false
+			})
 
 			if err := sendEmail(conf.Formula.Email.Subject, conf.Formula.Email.Body); err != nil {
 				log.Fatal(err)
@@ -212,23 +218,26 @@ func importData(targetFiles []string) error {
 		return errors.Wrapf(err, "failed to write to the file %s", tmp.Name())
 	}
 
-	if err = f.Close(); err != nil {
+	if err := f.Close(); err != nil {
 		log.Fatal(err)
 	}
 
-	args := []string{"-ExecutionPolicy", "Bypass", "-File", tmp.Name()}
-	args = append(args, targetFiles...)
-	args = append(args, filepath.Join(conf.OutDir, conf.Formula.File))
-	winCmd := exec.Command(`C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`, args...)
-	output, err := winCmd.CombinedOutput()
-	log.Printf("output: %s", string(output))
-	if err != nil {
-		return errors.Wrapf(err, "failed to run the command")
-	}
+	retry(30*time.Second, func() bool {
+		args := []string{"-ExecutionPolicy", "Bypass", "-File", tmp.Name()}
+		args = append(args, targetFiles...)
+		args = append(args, filepath.Join(conf.OutDir, conf.Formula.File))
+		winCmd := exec.Command(`C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`, args...)
+		output, err := winCmd.CombinedOutput()
+		log.Printf("output: %s", string(output))
+		if err == nil {
+			return true
+		}
+		return false
+	})
 	return nil
 }
 
-func waitForInternet(timeout time.Duration) {
+func retry(timeout time.Duration, f func() bool) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	to := time.NewTimer(timeout)
@@ -240,6 +249,9 @@ func waitForInternet(timeout time.Duration) {
 		case <-ticker.C:
 			_, err := net.Dial("tcp", net.JoinHostPort(conf.SMTP.Host, strconv.Itoa(conf.SMTP.Port)))
 			if err == nil {
+				return
+			}
+			if f() {
 				return
 			}
 		}
