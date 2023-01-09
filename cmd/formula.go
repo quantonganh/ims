@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"log"
 	"net"
@@ -78,13 +79,15 @@ to quickly create a Cobra application.`,
 			log.Fatal(err)
 		}
 
+		targetFiles := make([]string, 0, len(m))
 		for _, r := range m {
 			if err := os.Rename(filepath.Join(home, "Downloads", r.SourceFile), filepath.Join(conf.OutDir, r.TargetFile)); err != nil {
 				log.Fatal(err)
 			}
+			targetFiles = append(targetFiles, filepath.Join(conf.OutDir, r.TargetFile))
 		}
 
-		if err := importData(m); err != nil {
+		if err := importData(targetFiles); err != nil {
 			log.Fatal(err)
 		}
 
@@ -188,19 +191,39 @@ func getTargetFile(templateName string) string {
 	return ""
 }
 
-func importData(m map[string]report) error {
-	args := []string{"-ExecutionPolicy", "Bypass", "-File", "./refresh_all.ps1"}
-	for _, r := range m {
-		args = append(args, filepath.Join(conf.OutDir, r.TargetFile))
-	}
-	args = append(args, filepath.Join(conf.OutDir, conf.Formula.File))
+//go:embed refresh_all.ps1
+var refreshAll []byte
 
-	winCmd := exec.Command(`C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`, args...)
-	output, err := winCmd.CombinedOutput()
+func importData(targetFiles []string) error {
+	tmp, err := os.CreateTemp("", "refresh_all*.ps1")
 	if err != nil {
 		return err
 	}
+	defer os.Remove(tmp.Name())
+
+	f, err := os.OpenFile(tmp.Name(), os.O_WRONLY|os.O_CREATE, 0644)
+	if err != nil {
+		return err
+	}
+
+	_, err = f.Write(refreshAll)
+	if err != nil {
+		return err
+	}
+
+	if err = f.Close(); err != nil {
+		log.Fatal(err)
+	}
+
+	args := []string{"-ExecutionPolicy", "Bypass", "-File", tmp.Name()}
+	args = append(args, targetFiles...)
+	args = append(args, filepath.Join(conf.OutDir, conf.Formula.File))
+	winCmd := exec.Command(`C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`, args...)
+	output, err := winCmd.CombinedOutput()
 	log.Printf("output: %s", string(output))
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
