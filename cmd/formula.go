@@ -22,6 +22,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"gopkg.in/gomail.v2"
 )
 
 type report struct {
@@ -247,13 +248,28 @@ func retry(timeout time.Duration, f func() bool) {
 		case <-to.C:
 			return
 		case <-ticker.C:
-			_, err := net.Dial("tcp", net.JoinHostPort(conf.SMTP.Host, strconv.Itoa(conf.SMTP.Port)))
-			if err == nil {
-				return
-			}
 			if f() {
 				return
 			}
 		}
 	}
+}
+
+func sendEmail(subject, body string) error {
+	m := gomail.NewMessage()
+	recipients := make([]string, len(conf.Formula.Email.To))
+	for i, r := range conf.Formula.Email.To {
+		recipients[i] = m.FormatAddress(r, "")
+	}
+	m.SetHeader("From", conf.Formula.Email.From)
+	m.SetHeader("To", recipients...)
+	m.SetHeader("Subject", subject)
+	m.Attach(filepath.Join(conf.OutDir, conf.Formula.File))
+	m.SetBody("text/html", body)
+	d := gomail.NewDialer(conf.SMTP.Host, conf.SMTP.Port, conf.SMTP.Username, conf.SMTP.Password)
+	if err := d.DialAndSend(m); err != nil {
+		return errors.Errorf("failed to send mail to %s: %v", fmt.Sprintf("%+v\n", conf.Formula.Email.To), err)
+	}
+
+	return nil
 }
