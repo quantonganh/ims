@@ -220,7 +220,7 @@ func importData(targetFiles []string) error {
 	}
 
 	if err := f.Close(); err != nil {
-		log.Fatal(err)
+		return errors.Wrapf(err, "failed to close file %s", tmp.Name())
 	}
 
 	retry(30*time.Second, func() bool {
