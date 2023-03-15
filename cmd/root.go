@@ -5,10 +5,12 @@ package cmd
 
 import (
 	"fmt"
-	"log"
+	"io"
 	"os"
+	"time"
 
 	"github.com/mitchellh/go-homedir"
+	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -16,6 +18,8 @@ import (
 var (
 	cfgFile string
 	conf    *config
+	log     zerolog.Logger
+	f       *os.File
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -28,9 +32,29 @@ examples and usage of using your application. For example:
 Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		var err error
+		f, err = os.OpenFile(
+			fmt.Sprintf("ims_%s.txt", time.Now().Format("20060102150405")),
+			os.O_APPEND|os.O_CREATE|os.O_WRONLY,
+			0664,
+		)
+		if err != nil {
+			return err
+		}
+
+		mw := io.MultiWriter(os.Stdout, f)
+		log = zerolog.New(mw).With().Timestamp().Logger()
+		return nil
+	},
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	// Run: func(cmd *cobra.Command, args []string) { },
+	PostRun: func(cmd *cobra.Command, args []string) {
+		if err := f.Close(); err != nil {
+			log.Err(err).Msg("failed to close file")
+		}
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -120,10 +144,12 @@ func initConfig() {
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err != nil {
-		log.Fatal(err)
+		log.Err(err).Msg("failed to load the config file")
+		return
 	}
 
 	if err := viper.Unmarshal(&conf); err != nil {
-		log.Fatal(err)
+		log.Err(err).Msg("failed to unmarshal the config into a struct")
+		return
 	}
 }

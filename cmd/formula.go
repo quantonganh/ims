@@ -7,7 +7,6 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"os/exec"
@@ -41,87 +40,105 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		allocCtx, cancel := chromedp.NewExecAllocator(context.Background(), append(chromedp.DefaultExecAllocatorOptions[:], chromedp.Flag("headless", false))...)
-		defer cancel()
-
-		ctx, cancel := chromedp.NewContext(allocCtx, chromedp.WithDebugf(log.Printf))
-		defer cancel()
-
-		templates := conf.Formula.Templates
-		m := make(map[string]report, len(templates))
-		chromedp.ListenTarget(ctx, func(v interface{}) {
-			switch ev := v.(type) {
-			case *browser.EventDownloadWillBegin:
-				log.Println("EventDownloadWillBegin: ", ev.SuggestedFilename)
-				templateName := strings.Split(ev.SuggestedFilename, "_")[0]
-				_, ok := m[templateName]
-				if !ok {
-					m[templateName] = report{
-						SourceFile: ev.SuggestedFilename,
-						TargetFile: getTargetFile(templateName),
-					}
-				}
-			default:
-				return
-			}
-		})
-
 		daysBefore, err := cmd.Flags().GetUint("days-before")
 		if err != nil {
-			log.Fatal(err)
-		}
-
-		tasks, m := genReport(ctx, daysBefore)
-		if err := chromedp.Run(ctx, tasks); err != nil {
-			log.Fatal(err)
-		}
-
-		home, err := homedir.Dir()
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		targetFiles := make([]string, 0, len(m))
-		for _, r := range m {
-			if err := os.Rename(filepath.Join(home, "Downloads", r.SourceFile), filepath.Join(conf.OutDir, r.TargetFile)); err != nil {
-				log.Fatal(err)
-			}
-			targetFiles = append(targetFiles, filepath.Join(conf.OutDir, r.TargetFile))
-		}
-
-		if err := importData(targetFiles); err != nil {
-			log.Fatal(err)
+			log.Err(err).Msg("failed to get the value of days-before")
+			return
 		}
 
 		sendMail, err := cmd.Flags().GetBool("send-mail")
 		if err != nil {
-			log.Fatal(err)
+			log.Err(err).Msg("failed to get the value of send-mail")
+			return
 		}
-		if sendMail {
-			winCmd := exec.Command("cmd.exe", "/c", "netsh", "wlan", "connect", fmt.Sprintf("ssid=%s", conf.Wifi.SendMail), fmt.Sprintf("name=%s", conf.Wifi.SendMail))
-			if err := winCmd.Run(); err != nil {
-				log.Fatal(err)
-			}
-			defer func() {
-				winCmd = exec.Command("cmd.exe", "/c", "netsh", "wlan", "connect", fmt.Sprintf("ssid=%s", conf.Wifi.ExportReport), fmt.Sprintf("name=%s", conf.Wifi.ExportReport))
-				if err := winCmd.Run(); err != nil {
-					log.Fatal(err)
-				}
-			}()
 
-			retry(30*time.Second, func() bool {
-				_, err := net.Dial("tcp", net.JoinHostPort(conf.SMTP.Host, strconv.Itoa(conf.SMTP.Port)))
-				if err == nil {
-					return true
-				}
-				return false
-			})
-
-			if err := sendEmail(conf.Formula.Email.Subject, conf.Formula.Email.Body); err != nil {
-				log.Fatal(err)
-			}
+		if err := run(daysBefore, sendMail); err != nil {
+			log.Err(err).Msg("failed to run the command")
 		}
 	},
+}
+
+func run(daysBefore uint, sendMail bool) error {
+	allocCtx, cancel := chromedp.NewExecAllocator(context.Background(), append(chromedp.DefaultExecAllocatorOptions[:], chromedp.Flag("headless", false))...)
+	defer cancel()
+
+	ctx, cancel := chromedp.NewContext(allocCtx, chromedp.WithDebugf(log.Printf))
+	defer cancel()
+
+	templates := conf.Formula.Templates
+	m := make(map[string]report, len(templates))
+	chromedp.ListenTarget(ctx, func(v interface{}) {
+		switch ev := v.(type) {
+		case *browser.EventDownloadWillBegin:
+			log.Info().Msgf("EventDownloadWillBegin: %s", ev.SuggestedFilename)
+			templateName := strings.Split(ev.SuggestedFilename, "_")[0]
+			_, ok := m[templateName]
+			if !ok {
+				m[templateName] = report{
+					SourceFile: ev.SuggestedFilename,
+					TargetFile: getTargetFile(templateName),
+				}
+			}
+		default:
+			return
+		}
+	})
+
+	tasks, m := genReport(ctx, daysBefore)
+	if err := chromedp.Run(ctx, tasks); err != nil {
+		return fmt.Errorf("failed to run chromedp: %w", err)
+	}
+
+	home, err := homedir.Dir()
+	if err != nil {
+		return fmt.Errorf("failed to get home dir: %w", err)
+	}
+
+	targetFiles := make([]string, 0, len(m))
+	for _, r := range m {
+		if err := os.Rename(filepath.Join(home, "Downloads", r.SourceFile), filepath.Join(conf.OutDir, r.TargetFile)); err != nil {
+			return fmt.Errorf("failed to rename: %w", err)
+		}
+		targetFiles = append(targetFiles, filepath.Join(conf.OutDir, r.TargetFile))
+	}
+
+	if err := importData(targetFiles); err != nil {
+		return err
+	}
+
+	if sendMail {
+		defer func() {
+			winCmd := exec.Command("cmd.exe", "/c", "netsh", "wlan", "connect", fmt.Sprintf("ssid=%s", conf.Wifi.ExportReport), fmt.Sprintf("name=%s", conf.Wifi.ExportReport))
+			output, err := winCmd.CombinedOutput()
+			if err != nil {
+				log.Err(err).Msgf("failed to switch wifi to %s: %s: %w", conf.Wifi.ExportReport, string(output), err)
+			}
+			log.Printf("%s: %s", conf.Wifi.ExportReport, output)
+		}()
+
+		winCmd := exec.Command("cmd.exe", "/c", "netsh", "wlan", "connect", fmt.Sprintf("ssid=%s", conf.Wifi.SendMail), fmt.Sprintf("name=%s", conf.Wifi.SendMail))
+		output, err := winCmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("failed to switch wifi to %s: %s: %w", conf.Wifi.SendMail, string(output), err)
+		}
+		log.Printf("%s: %s", conf.Wifi.SendMail, output)
+
+		retry(30*time.Second, func() bool {
+			address := net.JoinHostPort(conf.SMTP.Host, strconv.Itoa(conf.SMTP.Port))
+			log.Printf("connecting to the %s", address)
+			_, err := net.Dial("tcp", address)
+			if err == nil {
+				return true
+			}
+			return false
+		})
+
+		if err := sendEmail(conf.Formula.Email.Subject, conf.Formula.Email.Body); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func init() {
@@ -223,10 +240,10 @@ func importData(targetFiles []string) error {
 	args = append(args, filepath.Join(conf.OutDir, conf.Formula.File))
 	winCmd := exec.Command(`C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`, args...)
 	output, err := winCmd.CombinedOutput()
-	log.Printf("output: %s", string(output))
 	if err != nil {
-		return errors.Wrap(err, "failed to run the command")
+		return fmt.Errorf("failed to run the command: %s: %w", string(output), err)
 	}
+	log.Printf("output: %s", string(output))
 	return nil
 }
 
@@ -237,12 +254,13 @@ func retry(timeout time.Duration, f func() bool) {
 	defer to.Stop()
 	for {
 		select {
-		case <-to.C:
-			return
 		case <-ticker.C:
 			if f() {
 				return
 			}
+		case <-to.C:
+			log.Info().Msgf("timed out after %s", timeout.String())
+			return
 		}
 	}
 }
