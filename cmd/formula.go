@@ -116,14 +116,18 @@ func run(daysBefore uint, sendMail bool) error {
 			log.Printf("%s: %s", conf.Wifi.ExportReport, output)
 		}()
 
-		winCmd := exec.Command("cmd.exe", "/c", "netsh", "wlan", "connect", fmt.Sprintf("ssid=%s", conf.Wifi.SendMail), fmt.Sprintf("name=%s", conf.Wifi.SendMail))
-		output, err := winCmd.CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("failed to switch wifi to %s: %s: %w", conf.Wifi.SendMail, string(output), err)
-		}
-		log.Printf("%s: %s", conf.Wifi.SendMail, output)
+		retry(3*time.Second, 30*time.Second, func() bool {
+			winCmd := exec.Command("cmd.exe", "/c", "netsh", "wlan", "connect", fmt.Sprintf("ssid=%s", conf.Wifi.SendMail), fmt.Sprintf("name=%s", conf.Wifi.SendMail))
+			output, err := winCmd.CombinedOutput()
+			if err == nil {
+				log.Printf("%s: %s", conf.Wifi.SendMail, output)
+				return true
+			}
+			log.Err(err).Msgf("failed to switch wifi to %s: %s: %w", conf.Wifi.SendMail, string(output), err)
+			return false
+		})
 
-		retry(30*time.Second, func() bool {
+		retry(time.Second, 30*time.Second, func() bool {
 			address := net.JoinHostPort(conf.SMTP.Host, strconv.Itoa(conf.SMTP.Port))
 			log.Printf("connecting to the %s", address)
 			_, err := net.Dial("tcp", address)
@@ -247,8 +251,8 @@ func importData(targetFiles []string) error {
 	return nil
 }
 
-func retry(timeout time.Duration, f func() bool) {
-	ticker := time.NewTicker(time.Second)
+func retry(interval, timeout time.Duration, f func() bool) {
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	to := time.NewTimer(timeout)
 	defer to.Stop()
