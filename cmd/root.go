@@ -4,6 +4,7 @@ Copyright © 2022 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -19,7 +20,6 @@ var (
 	cfgFile string
 	conf    *config
 	log     zerolog.Logger
-	f       *os.File
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -33,8 +33,7 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		var err error
-		f, err = os.OpenFile(
+		f, err := os.OpenFile(
 			fmt.Sprintf("ims_%s.txt", time.Now().Format("20060102150405")),
 			os.O_APPEND|os.O_CREATE|os.O_WRONLY,
 			0664,
@@ -42,6 +41,9 @@ to quickly create a Cobra application.`,
 		if err != nil {
 			return err
 		}
+
+		ctx := context.WithValue(cmd.Context(), "f", f)
+		cmd.SetContext(ctx)
 
 		mw := io.MultiWriter(os.Stdout, f)
 		log = zerolog.New(mw).With().Timestamp().Logger()
@@ -51,8 +53,12 @@ to quickly create a Cobra application.`,
 	// has an action associated with it:
 	// Run: func(cmd *cobra.Command, args []string) { },
 	PostRun: func(cmd *cobra.Command, args []string) {
-		if err := f.Close(); err != nil {
-			log.Err(err).Msg("failed to close file")
+		v := cmd.Context().Value("f")
+		f, ok := v.(*os.File)
+		if ok {
+			if err := f.Close(); err != nil {
+				log.Err(err).Msg("failed to close file")
+			}
 		}
 	},
 }
