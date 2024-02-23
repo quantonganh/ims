@@ -66,7 +66,6 @@ func run(daysBefore uint, sendMail bool) error {
 	if conf.ProfileDir != "" {
 		opts = append(
 			opts,
-			chromedp.UserDataDir(conf.UserDataDir),
 			chromedp.Flag("profile-directory", conf.ProfileDir),
 		)
 	}
