@@ -59,7 +59,18 @@ to quickly create a Cobra application.`,
 }
 
 func run(daysBefore uint, sendMail bool) error {
-	allocCtx, cancel := chromedp.NewExecAllocator(context.Background(), append(chromedp.DefaultExecAllocatorOptions[:], chromedp.Flag("headless", false))...)
+	opts := append(
+		chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.Flag("headless", false),
+	)
+	if conf.ProfileDir != "" {
+		opts = append(
+			opts,
+			chromedp.UserDataDir(conf.UserDataDir),
+			chromedp.Flag("profile-directory", conf.ProfileDir),
+		)
+	}
+	allocCtx, cancel := chromedp.NewExecAllocator(context.Background(), opts...)
 	defer cancel()
 
 	ctx, cancel := chromedp.NewContext(allocCtx, chromedp.WithDebugf(log.Printf))
